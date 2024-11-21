@@ -498,9 +498,9 @@ int main() {
 
         /* wait for vblank before scrolling */
         wait_vblank();
-        *bg0_x_scroll = xscroll;
+        *bg0_x_scroll = xscroll / 4;
 
-        *bg1_x_scroll = xscroll / 4;
+        *bg1_x_scroll = xscroll;
 
         sprite_update_all();
 
