@@ -12,6 +12,7 @@
 /* include the tile map we are using */
 #include "map.h"
 #include "map2.h"
+#include "map3.h"
 
 /* the width and height of the screen */
 #define WIDTH 240
@@ -179,9 +180,15 @@ void setup_background() {
     for(int i = 0; i < (map_width * map_height); i++){
         dest[i] = map2[i];
     }
+	
+    /* load the bg2 tile data into screen block 17 */
+    dest = screen_block(18);
+    for(int i = 0; i < (map_width * map_height); i++){
+        dest[i] = map3[i];
+    }
 
     /* set all control the bits in this register */
-    *bg0_control = 1 |    /* priority, 0 is highest, 3 is lowest */
+    *bg0_control = 2 |    /* priority, 0 is highest, 3 is lowest */
         (0 << 2)  |       /* the char block the image data is stored in */
         (0 << 6)  |       /* the mosaic flag */
         (1 << 7)  |       /* color mode, 0 is 16 colors, 1 is 256 colors */
@@ -189,11 +196,20 @@ void setup_background() {
         (1 << 13) |       /* wrapping flag */
         (0 << 14);        /* bg size, 0 is 256x256 */
 
-    *bg1_control = 0 |
+    *bg1_control = 1 |
         (1 << 2)  |
         (0 << 6)  |
         (1 << 7)  |
         (17 << 8)  |
+        (1 << 13)  |
+        (0 << 14);
+		
+		/* bg3 is the text background */
+	*bg2_control = 0 |
+        (1 << 2)  |
+        (0 << 6)  |
+        (1 << 7)  |
+        (18 << 8)  |
         (1 << 13)  |
         (0 << 14);
 }
@@ -203,6 +219,12 @@ void setup_background() {
 void delay(unsigned int amount) {
     for (int i = 0; i < amount * 10; i++);
 }
+
+
+
+
+
+// SPRITE //
 
 /* a sprite is a moveable image on the screen */
 struct Sprite {
@@ -458,10 +480,53 @@ void koopa_update(struct Koopa* koopa) {
     sprite_position(koopa->sprite, koopa->x, koopa->y);
 }
 
+
+
+
+
+// ENEMY //
+
+
+
+
+// ASSEMBLY //
+
+/* the idea is to use assembly to calculate the score */
+
+/* function to set text on the screen at a given location */
+void set_text(char* str, int row, int col) {                    
+    /* find the index in the texmap to draw to */
+    int index = row * 32 + col;
+
+    /* the first 32 characters are missing from the map (controls etc.) */
+    int missing = 32; 
+
+    /* pointer to text map */
+    volatile unsigned short* ptr = screen_block(18);
+
+    /* for each character */
+    while (*str) {
+        /* place this character in the map */
+        ptr[index] = *str - missing;
+
+        /* move onto the next character */
+        index++;
+        str++;
+    }   
+}
+
+/* assembly function declaration */
+int score(int n);
+
+
+
+
+// MAIN //
+
 /* the main function */
 int main() {
     /* we set the mode to mode 0 with bg0 and bg1 on */
-    *display_control = MODE0 | BG0_ENABLE | BG1_ENABLE | SPRITE_ENABLE | SPRITE_MAP_1D;
+    *display_control = MODE0 | BG0_ENABLE | BG1_ENABLE | BG2_ENABLE | SPRITE_ENABLE | SPRITE_MAP_1D;
 
     /* setup the background 0 */
     setup_background();
@@ -503,6 +568,12 @@ int main() {
         *bg1_x_scroll = xscroll;
 
         sprite_update_all();
+
+		/* call assembly function */
+		int steps = score(i);
+		char text[32];
+		sprintf(text, "%d -> %d", i, steps);
+		set_text(text, i - 1, 0);
 
         /* delay some */
         delay(50);
