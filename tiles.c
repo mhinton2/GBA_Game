@@ -8,6 +8,7 @@
 
 /* include sprite image we are using */
 #include "koopa.h"
+#include "enemy.h"
 
 /* include the tile map we are using */
 #include "map.h"
@@ -188,7 +189,7 @@ void setup_background() {
     }
 
     /* set all control the bits in this register */
-    *bg0_control = 2 |    /* priority, 0 is highest, 3 is lowest */
+    *bg0_control = 1 |    /* priority, 0 is highest, 3 is lowest */
         (0 << 2)  |       /* the char block the image data is stored in */
         (0 << 6)  |       /* the mosaic flag */
         (1 << 7)  |       /* color mode, 0 is 16 colors, 1 is 256 colors */
@@ -196,20 +197,11 @@ void setup_background() {
         (1 << 13) |       /* wrapping flag */
         (0 << 14);        /* bg size, 0 is 256x256 */
 
-    *bg1_control = 1 |
+    *bg1_control = 0 |
         (1 << 2)  |
         (0 << 6)  |
         (1 << 7)  |
         (17 << 8)  |
-        (1 << 13)  |
-        (0 << 14);
-		
-		/* bg3 is the text background */
-	*bg2_control = 0 |
-        (1 << 2)  |
-        (0 << 6)  |
-        (1 << 7)  |
-        (18 << 8)  |
         (1 << 13)  |
         (0 << 14);
 }
@@ -390,6 +382,16 @@ void setup_sprite_image() {
     memcpy16_dma((unsigned short*) sprite_image_memory, (unsigned short*) koopa_data, (koopa_width * koopa_height) / 2);
 }
 
+/* setup the sprite image and palette */
+void setup_enemy_image() {
+    /* load the palette from the image into palette memory*/
+    memcpy16_dma((unsigned short*) sprite_palette, (unsigned short*) enemy_palette, PALETTE_SIZE);
+
+    /* load the image into sprite image memory */
+    memcpy16_dma((unsigned short*) sprite_image_memory, (unsigned short*) enemy_data, (enemy_width * enemy_height) / 2);
+}
+
+
 /* a struct for the koopa's logic and behavior */
 struct Koopa {
     /* the actual sprite attribute info */
@@ -412,6 +414,16 @@ struct Koopa {
 
     /* the number of pixels away from the edge of the screen the koopa stays */
     int border;
+	
+	/* velocity */
+	int yvel;
+	
+	/* gravity and falling */
+	int gravity;
+	int falling;
+	
+	/* ground */
+	int ground;
 };
 
 /* initialize the koopa */
@@ -424,6 +436,11 @@ void koopa_init(struct Koopa* koopa) {
     koopa->counter = 0;
     koopa->animation_delay = 8;
     koopa->sprite = sprite_init(koopa->x, koopa->y, SIZE_16_32, 0, 0, koopa->frame, 0);
+	koopa->yvel = 0;
+	koopa->gravity = 50;
+	koopa->falling = 0;
+	koopa->ground = 0;
+	
 }
 
 /* move the koopa left or right returns if it is at edge of the screen */
@@ -476,8 +493,28 @@ void koopa_update(struct Koopa* koopa) {
             koopa->counter = 0;
         }
     }
+	
+	/* update y position and speed if falling */
+	if (koopa->falling) {
+        koopa->y += (koopa->yvel >> 8);
+        koopa->yvel += koopa->gravity;
+	}
+	
+	if (koopa->y <= koopa->ground) {
+		koopa->falling = 0;
+		koopa->yvel = 0;
+		koopa->y = 0;
+	}
 
     sprite_position(koopa->sprite, koopa->x, koopa->y);
+}
+
+/* jumping and falling */
+void koopa_jump(struct Koopa* koopa) {
+    if (!koopa->falling) {
+        koopa->yvel = -1500;
+        koopa->falling = 1;
+    }
 }
 
 
@@ -486,6 +523,92 @@ void koopa_update(struct Koopa* koopa) {
 
 // ENEMY //
 
+/* a struct for the enemy's logic and behavior */
+struct Enemy {
+    /* the actual sprite attribute info */
+    struct Sprite* sprite;
+
+    /* the x and y postion */
+    int x, y;
+
+    /* which frame of the animation he is on */
+    int frame;
+
+    /* the number of frames to wait before flipping */
+    int animation_delay;
+
+    /* the animation counter counts how many frames until we flip */
+    int counter;
+
+    /* whether the enemy is moving right now or not */
+    int move;
+
+    /* the number of pixels away from the edge of the screen the enemy stays */
+    int border;
+};
+
+/* initialize the enemy */
+void enemy_init(struct Enemy* enemy) {
+    enemy->x = 100;
+    enemy->y = 113;
+    enemy->border = 40;
+    enemy->frame = 0;
+    enemy->move = 0;
+    enemy->counter = 0;
+    enemy->animation_delay = 8;
+    enemy->sprite = sprite_init(enemy->x, enemy->y, SIZE_16_32, 0, 0, enemy->frame, 0);
+}
+
+/* move the enemy left (enemies only move left) */
+int enemy_left(struct Enemy* enemy) {
+    /* face left */
+    sprite_set_horizontal_flip(enemy->sprite, 1);
+    enemy->move = 1;
+
+    /* if we are at the left end, move enemy to beginning again */
+    if (enemy->x < enemy->border) {
+		enemy->x = 257;
+        return 1;
+    } else {
+        /* else move left */
+        enemy->x--;
+        return 0;
+    }
+}
+
+void enemy_stop(struct Enemy* enemy) {
+    enemy->move = 0;
+    enemy->frame = 0;
+    enemy->counter = 7;
+    sprite_set_offset(enemy->sprite, enemy->frame);
+}
+
+/* update the enemy */
+void enemy_update(struct Enemy* enemy) {
+    if (enemy->move) {
+        enemy->counter++;
+        if (enemy->counter >= enemy->animation_delay) {
+            enemy->frame = enemy->frame + 16;
+            if (enemy->frame > 16) {
+                enemy->frame = 0;
+            }
+            sprite_set_offset(enemy->sprite, enemy->frame);
+            enemy->counter = 0;
+        }
+    }
+
+    sprite_position(enemy->sprite, enemy->x, enemy->y);
+}
+
+/* check collision */
+int collide(struct Koopa* koopa, struct Enemy* enemy) {
+	if (koopa->y >= enemy->y && koopa->y <= enemy->y+28) {
+		if (koopa->x >= enemy->x && koopa->x <= enemy->x+16) {
+			return 1;
+		}
+	}
+	return 0;
+}
 
 
 
@@ -516,9 +639,19 @@ void set_text(char* str, int row, int col) {
 }
 
 /* assembly function declaration */
-int score(int n);
+void score(int* n);
 
 
+
+
+
+// GAME OVER // 
+
+/* game over clear screen */
+void game_over(volatile unsigned long* display) {
+	/* turn off bg 0 and 1 */
+	*display = MODE0 | BG2_ENABLE | SPRITE_ENABLE | SPRITE_MAP_1D;
+}
 
 
 // MAIN //
@@ -526,57 +659,71 @@ int score(int n);
 /* the main function */
 int main() {
     /* we set the mode to mode 0 with bg0 and bg1 on */
-    *display_control = MODE0 | BG0_ENABLE | BG1_ENABLE | BG2_ENABLE | SPRITE_ENABLE | SPRITE_MAP_1D;
+    *display_control = MODE0 | BG0_ENABLE | BG1_ENABLE | SPRITE_ENABLE | SPRITE_MAP_1D;
 
     /* setup the background 0 */
     setup_background();
 
     /* setup the sprite image data */
     setup_sprite_image();
-
-    
-
     struct Koopa koopa;
     koopa_init(&koopa);
+	
+	/* setup enemy */
+	setup_enemy_image();
+	struct Enemy enemy;
+	enemy_init(&enemy);
 
     /* set initial scroll to 0 */
     int xscroll = 0;
+	
+	/* set game over */
+	int game = 0;
+	
+	/* score */
+	int gamescore = 0;
 
     /* loop forever */
     while (1) {
-        /* update the koopa */
-        koopa_update(&koopa);
+		if (game == 0) {
+			/* update the koopa */
+			koopa_update(&koopa);
 
-        /* scroll with the arrow keys */
-        if (button_pressed(BUTTON_RIGHT)) {
-            if(koopa_right(&koopa)){
-                xscroll++;
-            }
-        }
-        if (button_pressed(BUTTON_LEFT)) {
-            if(koopa_left(&koopa)){
-                xscroll--;
-            }
-        } else {
-            koopa_stop(&koopa);
-        }
+			/* auto scroll koopa */
+			koopa_right(&koopa);
+			
+			/* auto scroll enemy */
+			enemy_left(&enemy);
+			
+			/* let koopa jump to avoid enemies */
+			if (button_pressed(BUTTON_A)) {
+				koopa_jump(&koopa);
+			}
+			
+			/* if hit an enemy */
+			if (collide(&koopa, &enemy) == 1) {
+				game = 1;
+			}
 
-        /* wait for vblank before scrolling */
-        wait_vblank();
-        *bg0_x_scroll = xscroll / 4;
+			/* wait for vblank before scrolling */
+			wait_vblank();
+			*bg0_x_scroll = xscroll / 4;
 
-        *bg1_x_scroll = xscroll;
+			*bg1_x_scroll = xscroll;
 
-        sprite_update_all();
+			sprite_update_all();
 
-		/* call assembly function */
-		int steps = score(i);
-		char text[32];
-		sprintf(text, "%d -> %d", i, steps);
-		set_text(text, i - 1, 0);
+			/* call assembly function */
+			score(&gamescore);
 
-        /* delay some */
-        delay(50);
+			/* delay some */
+			delay(50);
+		} else {
+			game_over(display_control);
+			char text[32] = "Score = ";
+			text[8] = gamescore;
+			set_text(text, 0, 0);
+		}
     }
 }
 
