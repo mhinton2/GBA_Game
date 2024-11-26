@@ -5,3 +5,4 @@
 score:
 	add r0, r0, #5
 	mov pc, lr
+	
