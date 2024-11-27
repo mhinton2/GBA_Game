@@ -581,6 +581,10 @@ void koopa_update(struct Koopa* koopa, int xscroll) {
     sprite_position(koopa->sprite, koopa->x, koopa->y);
 }
 
+
+
+
+
 // ENEMY //
 
 /* a struct for the enemy's logic and behavior */
@@ -615,7 +619,7 @@ void enemy_init(struct Enemy* enemy) {
     enemy->frame = 0;
     enemy->move = 0;
     enemy->counter = 0;
-    enemy->animation_delay = 8;
+    enemy->animation_delay = 16;
     enemy->sprite = sprite_init(enemy->x, enemy->y, SIZE_16_32, 0, 0, enemy->frame, 0);
 }
 
@@ -667,6 +671,19 @@ int collide(struct Koopa* koopa, struct Enemy* enemy) {
     return 0;
 }
 
+
+
+
+
+
+// ASSEMBLY //
+int score(int s, int k);
+
+
+
+
+
+
 // MAIN //
 
 /* the main function */
@@ -690,7 +707,7 @@ int main() {
     koopa_init(&koopa);
 
 	/* setup enemy and enemy speed */
-	int timer = 0;
+	int timer = 500;
     struct Enemy enemy;
     enemy_init(&enemy);
 
@@ -704,8 +721,9 @@ int main() {
     /* loop forever */
     while (1) {
         if(game == 0){
-			/* update timer */
+			/* update timer + score */
 			timer++;
+			
             /* update the koopa */
             koopa_update(&koopa, xscroll);
             enemy_update(&enemy);
@@ -730,9 +748,13 @@ int main() {
 
             enemy_left(&enemy, timer);
 
+			/* end game if hit */
             if(collide(&koopa, &enemy) == 1){
                 game = 1;
             }
+			
+			/* update score */
+			gamescore = score(gamescore, timer);
 
             /* wait for vblank before scrolling */
             wait_vblank();
@@ -745,7 +767,14 @@ int main() {
             /* delay some */
             delay(300);
         } else {
-            gameoverscreen(gamescore);
+			xscroll=0;
+            wait_vblank();
+            *bg0_x_scroll = xscroll;
+
+            *bg1_x_scroll = xscroll / 4;
+
+            sprite_update_all();
+            gameoverscreen((gamescore*-1)-1000);
         }
     }
 }

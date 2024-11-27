@@ -150,8 +150,7 @@ void gameoverscreen(int gamescore) {
 
     /* call assembly function */
 	char msg[10];
-	gamescore = gamescore / 1000;
-    sprintf(msg, "Score = %d", gamescore);
+    sprintf(msg, "Game over! Score = %d", gamescore);
     set_text(msg, 0, 0);
 
     /* loop forever */
