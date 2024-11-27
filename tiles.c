@@ -3,6 +3,8 @@
  * program which demonstraes tile mode 0
  */
 
+#include "gameover.c"
+
 /* include the image we are using */
 #include "background.h"
 
@@ -13,7 +15,6 @@
 /* include the tile map we are using */
 #include "map.h"
 #include "map2.h"
-#include "map3.h"
 
 /* the width and height of the screen */
 #define WIDTH 240
@@ -426,14 +427,14 @@ void koopa_init(struct Koopa* koopa) {
     koopa->animation_delay = 8;
     koopa->sprite = sprite_init(koopa->x, koopa->y, SIZE_16_32, 0, 0, koopa->frame, 0);
     koopa->yvel = 0;
-    koopa->gravity = 50;
+    koopa->gravity = 100;
     koopa->ground = 0;
 }
 
 /* move the koopa left or right returns if it is at edge of the screen */
 int koopa_left(struct Koopa* koopa) {
     /* face left */
-    sprite_set_horizontal_flip(koopa->sprite, 1);
+    sprite_set_horizontal_flip(koopa->sprite, 0);
     koopa->move = 1;
 
     /* if we are at the left end, just scroll the screen */
@@ -447,7 +448,7 @@ int koopa_left(struct Koopa* koopa) {
 }
 int koopa_right(struct Koopa* koopa) {
     /* face right */
-    sprite_set_horizontal_flip(koopa->sprite, 0);
+    sprite_set_horizontal_flip(koopa->sprite, 1);
     koopa->move = 1;
 
     /* if we are at the right end, just scroll the screen */
@@ -608,9 +609,9 @@ struct Enemy {
 
 /* intialize the enemy */
 void enemy_init(struct Enemy* enemy) {
-    enemy->x = 100;
+    enemy->x = 180;
     enemy->y = 113;
-    enemy->border = 40;
+    enemy->border = -10;
     enemy->frame = 0;
     enemy->move = 0;
     enemy->counter = 0;
@@ -619,9 +620,8 @@ void enemy_init(struct Enemy* enemy) {
 }
 
 /* move the enemy left (enemies only move left) */
-int enemy_left(struct Enemy* enemy) {
+int enemy_left(struct Enemy* enemy, int timer) {
     /* face left */
-    sprite_set_horizontal_flip(enemy->sprite, 1);
     enemy->move = 1;
 
     /* if we are at the left end, move enemy to beginning again */
@@ -630,7 +630,7 @@ int enemy_left(struct Enemy* enemy) {
         return 1;
     } else {
         /* else move left */
-        enemy->x--;
+        enemy->x = enemy->x - (timer/500);
         return 0;
     }
 }
@@ -660,19 +660,11 @@ void enemy_update(struct Enemy* enemy) {
 /* check collision */
 int collide(struct Koopa* koopa, struct Enemy* enemy) {
     if(koopa->y >= enemy->y && koopa->y <= enemy->y+28){
-        if(koopa->x >= enemy->x && koopa->x <= enemy->x+16){
+        if(koopa->x+16 >= enemy->x && koopa->x <= enemy->x+16){
             return 1;
         }
     }
     return 0;
-}
-
-// GAME OVER //
-
-/* game over clear screen */
-void game_over(volatile unsigned long* display){
-    /* turn off bg 0 and 1 */
-    *display = MODE0 | BG2_ENABLE | SPRITE_ENABLE | SPRITE_MAP_1D;
 }
 
 // MAIN //
@@ -697,6 +689,8 @@ int main() {
     struct Koopa koopa;
     koopa_init(&koopa);
 
+	/* setup enemy and enemy speed */
+	int timer = 0;
     struct Enemy enemy;
     enemy_init(&enemy);
 
@@ -710,6 +704,8 @@ int main() {
     /* loop forever */
     while (1) {
         if(game == 0){
+			/* update timer */
+			timer++;
             /* update the koopa */
             koopa_update(&koopa, xscroll);
             enemy_update(&enemy);
@@ -732,11 +728,11 @@ int main() {
                 koopa_jump(&koopa);
             }
 
-            enemy_left(&enemy);
+            enemy_left(&enemy, timer);
 
-            //if(collide(&koopa, &enemy) == 1){
-            //    game = 1;
-            //}
+            if(collide(&koopa, &enemy) == 1){
+                game = 1;
+            }
 
             /* wait for vblank before scrolling */
             wait_vblank();
@@ -749,7 +745,7 @@ int main() {
             /* delay some */
             delay(300);
         } else {
-            game_over(display_control);
+            gameoverscreen(gamescore);
         }
     }
 }
